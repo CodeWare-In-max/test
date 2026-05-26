@@ -11,10 +11,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      with:
-        persist-credentials: true
+    #- name: Checkout Repository
+      #uses: actions/checkout@v4
+      #with:
+       # persist-credentials: true
 
     - name: Download and Install Playit
       run: |
