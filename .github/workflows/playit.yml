@@ -3,24 +3,96 @@ name: Playit RDP Tunnel
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   setup-rdp-tunnel:
     runs-on: windows-latest
 
     steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        persist-credentials: true
 
     - name: Download and Install Playit
       run: |
         Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
-        Start-Sleep -Seconds 5  # Give some time for the download to complete
+        Start-Sleep -Seconds 5
 
-        
     # Default, optional.
     - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server'-name "fDenyTSConnections" -Value 0
+      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
     - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
     - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
     - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
+
+    - name: Install MS Office (Word and Excel)
+      run: |
+        # Using Chocolatey to install Office 365. This may take 5-10 minutes.
+        choco install office365proplus -y --no-progress
+      continue-on-error: true
+
+    - name: Copy sbr folder to Desktop
+      run: |
+        $desktopPath = "$env:USERPROFILE\Desktop\sbr"
+        if (Test-Path "sbr") {
+            New-Item -ItemType Directory -Force -Path $desktopPath
+            Copy-Item -Path "sbr\*" -Destination $desktopPath -Recurse -Force
+            Write-Host "sbr folder copied to Desktop successfully."
+        } else {
+            Write-Warning "sbr folder not found in the repository root."
+        }
+
+    - name: Configure Auto-Sync Script
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Configure local git signature
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Authenticate git remote for push authorization
+        $repoUrl = "https://x-access-token:$env:GH_TOKEN@github.com/$env:GITHUB_REPOSITORY.git"
+        git remote set-url origin $repoUrl
+
+        $workspace = "$env:GITHUB_WORKSPACE"
+        $desktopSbr = "$env:USERPROFILE\Desktop\sbr"
+        
+        # Create sync script
+        $scriptContent = @"
+        `$source = "$desktopSbr"
+        `$destination = "$workspace\sbr"
+        
+        while (`$true) {
+            if (Test-Path `$source) {
+                # Sync files from Desktop to cloned repo path
+                Copy-Item -Path "`$source\*" -Destination `$destination -Recurse -Force -ErrorAction SilentlyContinue
+                
+                cd "$workspace"
+                `$status = git status --porcelain
+                if (`$status) {
+                    Write-Host "Changes detected. Pushing to GitHub..."
+                    git add .
+                    git commit -m "Auto-sync from RDP session [skip ci]"
+                    git push origin HEAD:${{ github.ref_name }}
+                }
+            }
+            Start-Sleep -Seconds 60
+        }
+        "@
+
+        $scriptPath = "$env:USERPROFILE\sync.ps1"
+        Set-Content -Path $scriptPath -Value $scriptContent
+
+        # Add to Windows Startup directory
+        $startupFolder = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup"
+        $shortcutContent = "Start-Process powershell -ArgumentList `"-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"`" -WindowStyle Hidden"
+        Set-Content -Path "$startupFolder\start-sync.bat" -Value $shortcutContent
+        
+        # Start the sync process immediately in the background
+        Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`"" -WindowStyle Hidden
 
     - name: Start Playit and Set Up RDP Tunnel
       env:
@@ -29,8 +101,7 @@ jobs:
         Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
         Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
 
-        
-    # Prevent workflow to stop
+    # Prevent workflow from stopping
     - name: Keep the GitHub Action Runner Alive
       run: |
-          Start-Sleep -Seconds 11800  # Adjust the duration based on your needs
+          Start-Sleep -Seconds 11800
