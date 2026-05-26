@@ -28,11 +28,11 @@ jobs:
     - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
     - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
-    - name: Install MS Office (Word and Excel)
-      run: |
+    #- name: Install MS Office (Word and Excel)
+      #run: |
         # Using Chocolatey to install Office 365. This may take 5-10 minutes.
-        choco install office365proplus -y --no-progress
-      continue-on-error: true
+        #choco install office365proplus -y --no-progress
+      #continue-on-error: true
 
     - name: Copy sbr folder to Desktop
       run: |
