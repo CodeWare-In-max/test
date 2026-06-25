@@ -53,7 +53,7 @@ jobs:
       - name: Extract Unity Editor to Hub folder
         shell: powershell
         run: |
-          7z x "$env:RUNNER_TEMP\editor.zip" -o"C:\Program Files\Unity\Hub\Editor"
+          7z x "$env:RUNNER_TEMP\editor.zip" -o"C:\Program Files\Unity\Hub"
 
       - name: Clean up temp zip
         if: always()
