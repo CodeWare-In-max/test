@@ -11,38 +11,57 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    #- name: Checkout Repository
-      #uses: actions/checkout@v4
-      #with:
-       # persist-credentials: true
+      # - name: Checkout Repository
+      #   uses: actions/checkout@v4
+      #   with:
+      #     persist-credentials: true
 
-    - name: Download and Install Playit
-      run: |
-        Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
-        Start-Sleep -Seconds 5
+      - name: Download and Install Playit
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
+          Start-Sleep -Seconds 5
 
-    # Default, optional.
-    - name: Enable TS
-      run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-    - run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-    - run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-    - run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
+      - name: Enable TS
+        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 
-    #- name: Install MS Office (Word and Excel)
-      #run: |
-        # Using Chocolatey to install Office 365. This may take 5-10 minutes.
-        #choco install office365proplus -y --no-progress
-      #continue-on-error: true
+      - name: Enable Remote Desktop Firewall
+        run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
+      - name: Enable Network Level Authentication
+        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-    - name: Start Playit and Set Up RDP Tunnel
-      env:
-        PLAYIT_AUTH_KEY: ${{ secrets.DEAR_FIN }} 
-      run: |
-        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
-        Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
+      - name: Set runneradmin Password
+        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
-    # Prevent workflow from stopping
-    - name: Keep the GitHub Action Runner Alive
-      run: |
+      - name: Cache Unity Editor + Android module
+        id: unity-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files\Unity\Hub\Editor\6000.3.17f1
+          key: unity-6000.3.17f1-android-windows
+
+      - name: Install Unity Editor
+        if: steps.unity-cache.outputs.cache-hit != 'true'
+        run: |
+          & "C:\Program Files\Unity Hub\Unity Hub.exe" -- --headless install --version 6000.3.17f1 --changeset cf0352b38e81
+
+      - name: Install Android Build Support module
+        if: steps.unity-cache.outputs.cache-hit != 'true'
+        run: |
+          & "C:\Program Files\Unity Hub\Unity Hub.exe" -- --headless install-modules --version 6000.3.17f1 -m android --childModules
+
+      # - name: Install MS Office (Word and Excel)
+      #   run: |
+      #     choco install office365proplus -y --no-progress
+      #   continue-on-error: true
+
+      - name: Start Playit and Set Up RDP Tunnel
+        env:
+          PLAYIT_AUTH_KEY: ${{ secrets.DEAR_FIN }}
+        run: |
+          Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
+          Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
+
+      - name: Keep the GitHub Action Runner Alive
+        run: |
           Start-Sleep -Seconds 11800
