@@ -17,24 +17,66 @@ jobs:
       #     persist-credentials: true
 
       - name: Download and Install Playit
+        shell: powershell
         run: |
           Invoke-WebRequest -Uri "https://github.com/playit-cloud/playit-agent/releases/download/v0.15.26/playit-windows-x86_64-signed.exe" -OutFile "$env:USERPROFILE\playit.exe"
           Start-Sleep -Seconds 5
 
-      - name: Enable TS
-        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+      - name: Enable Terminal Services
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
 
       - name: Enable Remote Desktop Firewall
-        run: Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        shell: powershell
+        run: |
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
       - name: Enable Network Level Authentication
-        run: Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
       - name: Set runneradmin Password
-        run: Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
+        shell: powershell
+        run: |
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
       - name: Cache Unity Editor + Android module
         id: unity-cache
+        uses: actions/cache@v4
+        with:
+          path: C:\Program Files\Unity\Hub\Editor\6000.3.17f1
+          key: unity-6000.3.17f1-android-windows
+
+      - name: Install Unity Editor + Android module
+        if: steps.unity-cache.outputs.cache-hit != 'true'
+        shell: powershell
+        run: |
+          $hub = "C:\Program Files\Unity Hub\Unity Hub.exe"
+          New-Item "install-unity.bat" -ItemType File -Force | Out-Null
+          Add-Content install-unity.bat "`"$hub`" -- --headless install --version 6000.3.17f1 --changeset cf0352b38e81"
+          Add-Content install-unity.bat "`"$hub`" -- --headless install-modules --version 6000.3.17f1 -m android --childModules"
+          Start-Process -FilePath ".\install-unity.bat" -Wait -NoNewWindow
+
+      # - name: Install MS Office (Word and Excel)
+      #   shell: powershell
+      #   run: |
+      #     choco install office365proplus -y --no-progress
+      #   continue-on-error: true
+
+      - name: Start Playit and Set Up RDP Tunnel
+        shell: powershell
+        env:
+          PLAYIT_AUTH_KEY: ${{ secrets.DEAR_FIN }}
+        run: |
+          Start-Process -FilePath "$env:USERPROFILE\playit.exe" -ArgumentList "--secret $env:PLAYIT_AUTH_KEY" -NoNewWindow -Wait
+          Start-Process -FilePath "$env:USERPROFILE\playit.exe" -NoNewWindow
+
+      - name: Keep the GitHub Action Runner Alive
+        shell: powershell
+        run: |
+          Start-Sleep -Seconds 11800        id: unity-cache
         uses: actions/cache@v4
         with:
           path: C:\Program Files\Unity\Hub\Editor\6000.3.17f1
