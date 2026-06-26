@@ -2,6 +2,12 @@ name: Playit RDP Tunnel
 
 on:
   workflow_dispatch:
+    inputs:
+      download_unity:
+        description: "Download and extract Unity Editor"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -43,6 +49,7 @@ jobs:
           Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
       - name: Download Unity Editor zip from R2
+        if: ${{ inputs.download_unity }}
         shell: powershell
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY }}
@@ -51,12 +58,13 @@ jobs:
           aws s3 cp s3://unity/editor.zip "$env:RUNNER_TEMP\editor.zip" --endpoint-url ${{ secrets.R2_ENDPOINT }}
 
       - name: Extract Unity Editor to Hub folder
+        if: ${{ inputs.download_unity }}
         shell: powershell
         run: |
-          7z x "$env:RUNNER_TEMP\editor.zip" -o"C:\Program Files\Unity\Hub"
+          7z x "$env:RUNNER_TEMP\editor.zip" -o"C:\Program Files\Unity\Hub\Editor"
 
       - name: Clean up temp zip
-        if: always()
+        if: ${{ always() && inputs.download_unity }}
         shell: powershell
         run: |
           Remove-Item "$env:RUNNER_TEMP\editor.zip" -Force -ErrorAction SilentlyContinue
