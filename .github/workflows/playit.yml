@@ -46,7 +46,7 @@ jobs:
       - name: Set runneradmin Password
         shell: powershell
         run: |
-          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "1234" -Force)
+          Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "p@ssw0rd!" -Force)
 
       - name: Download Unity Editor zip from R2
         if: ${{ inputs.download_unity }}
